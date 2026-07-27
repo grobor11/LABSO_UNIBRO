@@ -1,0 +1,9 @@
+# File compilati da Java
+*.class
+bin/
+out/
+
+# Cartelle configurazione IDE (Eclipse, IntelliJ, VS Code)
+.idea/
+.vscode/
+*.iml
