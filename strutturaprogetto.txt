@@ -1,0 +1,18 @@
+src/
+├── aggregator/
+│   ├── AggregatorMain.java         // Main per avviare l'Aggregator (Master)
+│   ├── AggregatorServer.java       // Accetta le connessioni in arrivo (ServerSocket)
+│   ├── ClientHandler.java          // Runnable/Thread gestore della singola connessione client
+│   ├── ResourceRegistry.java       // Struttura dati condivisa con i metodi synchronized
+│   └── DownloadLogManager.java     // Gestore thread-safe del registro log dei download
+│
+├── client/
+│   ├── ClientMain.java             // Main per avviare il Nodo Sensore
+│   ├── CommandHandler.java         // Thread dedicato all'interfaccia a riga di comando (CLI)
+│   ├── PeerServer.java             // ServerSocket interno al nodo per servire gli altri peer
+│   ├── PeerClientHandler.java      // Thread gestore dell'invio risorsa a un altro peer
+│   ├── LocalStorage.java           // Gestore delle rilevazioni locali (thread-safe)
+│   └── RobustDownloader.java       // Implementazione del protocollo di download tollerante ai guasti
+│
+└── common/
+    └── Protocol.java               // Messaggi di rete, costanti, comandi e classi di supporto (es. DTO)
