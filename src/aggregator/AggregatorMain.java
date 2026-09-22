@@ -51,22 +51,56 @@ public class AggregatorMain{
             // Switch case per gestire i comandi inseriti dall'utente
             switch(command) {
                 case "listdata":
-                    // Riechiede i dati aggiornati al registry e li stampa
-                    System.out.println(registry.getGlobalList());
-                    break;
-                case "log":
-                    // Richiede lo storico dei download completati/falliti
-                    System.out.println(logManager.getLogs());
-                    break;
-                case "quit":
-    
-                    System.out.println("Chiusura del server...");
-                    System.exit(0); // Abbatte l'intera JVM, terminando sia server che CLI
-                    break;
-                default:
-                    // Messaggio di errore per comandi non riconosciuti
-                    System.out.println("Comando non riconosciuto. Usa uno dei comandi disponibili.");
 
+                    // Comando per visuallizzare tutte le risorse registrate 
+                    // registry.getGlobalList() restituisce una Mappa di tutte le risorse 
+                    // Usiamo "var" così il compilatore capisce in automatico che il tipo è Map<String, Set<PeerInfo>>.
+                    var mappa = registry.getGlobalList();
+                    if (mappa.isEmpty()) {
+                        System.out.println("Nessuna risorsa registrata al momento.");
+                    } else {
+
+                        // Iteriamo sull'intero insieme (entryset) delle coppie chiave-valore della mappa
+                        //entry.getKey() restituisce il nome della risorsa, entry.getValue() restituisce l'insieme dei nodi che la possiedono.
+                        for (var entry : mappa.entrySet()) {
+                            System.out.println("File: " + entry.getKey() + " -> Posseduto da: " + entry.getValue());
+                        }
+                    }
+                    break;
+
+                case "log":
+
+                    // Comando per visualizzare lo storico dei download avvenuti tra i nodi sensore.
+                    // logManager.getLogs() restituisce una List di stringhe formattate.
+                    var logList = logManager.getLogs();
+
+                    // Verifichiamo se lo storico è vuoto
+                    if (logList.isEmpty()) {
+                        System.out.println("Nessun download registrato.");
+                    } else {
+
+                        // Usiamo ciclo for-each per stampare ogni log registrato
+                        for (String log : logList) {
+                            System.out.println(log);
+                        }
+                    }
+                    break;
+
+                case "quit":
+
+                    // Comando per spegnere in modo sicuro l'Aggregator.
+                    System.out.println("Chiusura del server...");
+                    
+                    // Questo comando forza l'arresto immediato di tutta la JVM
+                    // Il parametro 0 indica al sistema operativo che l'uscita è avvenuta senza errori.
+                    System.exit(0);
+                    break;
+                    
+                default:
+
+                    // Se l'utente digita una parola non prevista, il server non va in crash ma mostra un messaggio di errore.
+                    System.out.println("Comando non riconosciuto. Usa uno dei comandi disponibili.");
+                    break;
             }
 
         }
