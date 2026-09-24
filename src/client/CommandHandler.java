@@ -1,5 +1,6 @@
 package client;
 
+import common.Protocol;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -28,7 +29,7 @@ public class CommandHandler implements Runnable {
     private final RobustDownloader robustDownloader;
 
     // Indica se il ciclo di lettura dei comandi deve rimanere attivo.
-    private volatile boolean running = true;
+    private volatile boolean isRunning = true;
 
     // Riceve tutte le risorse necessarie per eseguire i comandi dell'utente.
     public CommandHandler(LocalStorage localStorage, Socket aggregatorSocket, 
@@ -45,7 +46,7 @@ public class CommandHandler implements Runnable {
     public void run() {
         // Legge continuamente i comandi dalla console finché il client è attivo.
         try (BufferedReader consoleReader = new BufferedReader(new InputStreamReader(System.in))) {
-            while (running) {
+            while (isRunning) {
                 System.out.print("> ");
                 String inputLine = consoleReader.readLine();
 
@@ -61,54 +62,54 @@ public class CommandHandler implements Runnable {
                 handleCommand(inputLine);
             }
         } catch (IOException e) {
-            if (running) {
+            if (isRunning) {
                 System.err.println("Errore di lettura da tastiera: " + e.getMessage());
             }
         }
     }
 
     // Analizza il comando principale e delega l'operazione al metodo appropriato.
-    private void handleCommand(String inputLine) {
-        String[] tokens = inputLine.split("\\s+");
-        String mainCmd = tokens[0].toLowerCase();
+    private void handleCommand(String commandLine) {
+        String[] commandTokens = commandLine.split("\\s+");
+        String commandName = commandTokens[0].toLowerCase();
 
-        switch (mainCmd) {
+        switch (commandName) {
             case "listdata":
-                if (tokens.length < 2) {
+                if (commandTokens.length < 2) {
                     System.out.println("Uso non valido. Sintassi: listdata <local|remote>");
                     return;
                 }
-                String scope = tokens[1].toLowerCase();
-                if (scope.equals("local")) {
-                    handleListDataLocal();
-                } else if (scope.equals("remote")) {
-                    handleListDataRemote();
+                String resourceScope = commandTokens[1].toLowerCase();
+                if (resourceScope.equals("local")) {
+                    handleLocalResourceList();
+                } else if (resourceScope.equals("remote")) {
+                    handleRemoteResourceList();
                 } else {
                     System.out.println("Opzione non valida. Usa 'local' o 'remote'.");
                 }
                 break;
 
             case "add":
-                if (tokens.length < 3) {
+                if (commandTokens.length < 3) {
                     System.out.println("Uso non valido. Sintassi: add <nome_risorsa> <contenuto>");
                     return;
                 }
-                String resourceName = tokens[1];
+                String resourceName = commandTokens[1];
                 // Ricostruisce l'eventuale contenuto con spazi interni
-                String content = inputLine.substring(inputLine.indexOf(tokens[2]));
-                handleAdd(resourceName, content);
+                String resourceContent = commandLine.substring(commandLine.indexOf(commandTokens[2]));
+                handleAddResource(resourceName, resourceContent);
                 break;
 
             case "download":
-                if (tokens.length < 2) {
+                if (commandTokens.length < 2) {
                     System.out.println("Uso non valido. Sintassi: download <nome_risorsa>");
                     return;
                 }
-                handleDownload(tokens[1]);
+                handleDownloadResource(commandTokens[1]);
                 break;
 
             case "quit":
-                handleQuit();
+                handleDisconnect();
                 break;
 
             default:
@@ -118,26 +119,22 @@ public class CommandHandler implements Runnable {
     }
 
     // Mostra le rilevazioni salvate nell'archivio locale del nodo.
-    private void handleListDataLocal() {
-        Set<String> keys = localStorage.getAllKeys();
+    private void handleLocalResourceList() {
+        Set<String> resourceNames = localStorage.getAllKeys();
         System.out.println("Risorse:");
-        if (keys.isEmpty()) {
-            System.out.println(" (nessuna rilevazione salvata localmente)");
-        } else {
-            for (String key : keys) {
-                System.out.println(" - " + key + ": " + localStorage.getData(key));
-            }
+        for (String resourceName : resourceNames) {
+            System.out.println(resourceName);
         }
     }
 
     // Richiede all'Aggregator l'elenco delle rilevazioni disponibili sui nodi remoti.
-    private void handleListDataRemote() {
+    private void handleRemoteResourceList() {
         try {
-            aggregatorOut.println("LISTDATA_REMOTE");
+            aggregatorOut.println(Protocol.REQUEST_GLOBAL_LIST);
             // Legge le righe inviate dall'Aggregator fino al messaggio di terminazione.
             String line;
             while ((line = aggregatorIn.readLine()) != null) {
-                if (line.equals("END") || line.equals("OK")) {
+                if (line.equals(Protocol.LIST_END) || line.equals(Protocol.SUCCESS)) {
                     break;
                 }
                 System.out.println(line);
@@ -148,15 +145,15 @@ public class CommandHandler implements Runnable {
     }
 
     // Salva una rilevazione localmente e comunica all'Aggregator la nuova risorsa.
-    private void handleAdd(String resourceName, String content) {
-        localStorage.addData(resourceName, content);
+    private void handleAddResource(String resourceName, String resourceContent) {
+        localStorage.addData(resourceName, resourceContent);
         System.out.println("Rilevazione '" + resourceName + "' salvata in locale.");
 
         // Invia una notifica all'Aggregator per registrare la nuova risorsa.
-        aggregatorOut.println("ADD " + resourceName);
+        aggregatorOut.println(Protocol.UPDATE_RESOURCES + " " + resourceName);
         try {
             String ack = aggregatorIn.readLine();
-            if (ack != null && ack.startsWith("OK")) {
+            if (ack != null && ack.startsWith(Protocol.SUCCESS)) {
                 System.out.println("Rilevazione registrata sull'Aggregator.");
             }
         } catch (IOException e) {
@@ -165,7 +162,7 @@ public class CommandHandler implements Runnable {
     }
 
     // Avvia il download della risorsa richiesta tramite il downloader robusto.
-    private void handleDownload(String resourceName) {
+    private void handleDownloadResource(String resourceName) {
         if (robustDownloader != null) {
             robustDownloader.downloadResource(resourceName);
         } else {
@@ -174,9 +171,9 @@ public class CommandHandler implements Runnable {
     }
 
     // Arresta il client, avvisa l'Aggregator e chiude la connessione di rete.
-    private void handleQuit() {
-        running = false;
-        aggregatorOut.println("QUIT");
+    private void handleDisconnect() {
+        isRunning = false;
+        aggregatorOut.println(Protocol.UNREGISTER_NODE);
         try {
             if (aggregatorSocket != null && !aggregatorSocket.isClosed()) {
                 aggregatorSocket.close();
