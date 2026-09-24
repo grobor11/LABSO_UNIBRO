@@ -1,6 +1,5 @@
 package aggregator;
 
-import common.Protocol;
 import java.util.Scanner;
 
 /*
@@ -31,11 +30,11 @@ public class AggregatorMain{
         serverThread.start();
 
         // Avvio dell'interfaccia a riga di comando 
-        runCLI(registry, logManager);
+        runCLI(registry, logManager, serverThread);
 
     }
 
-    private static void runCLI(ResourceRegistry registry, DownloadLogManager logManager) {
+    private static void runCLI(ResourceRegistry registry, DownloadLogManager logManager, Thread serverThread) {
         Scanner scan = new Scanner(System.in);
 
         // Ciclo infinito per mantenere CLI interattiva e sempre in ascolto
@@ -90,11 +89,15 @@ public class AggregatorMain{
 
                     // Comando per spegnere in modo sicuro l'Aggregator.
                     System.out.println("Chiusura del server...");
+                    serverThread.interrupt(); // Invia il segnale di spegnimento al ciclo while
                     
-                    // Questo comando forza l'arresto immediato di tutta la JVM
-                    // Il parametro 0 indica al sistema operativo che l'uscita è avvenuta senza errori.
-                    System.exit(0);
-                    break;
+                    try{
+                        serverThread.join(); //Attende che l'AggregatorServer finisca di chiudere tutte le connessioni e termini il thread
+                    } catch (InterruptedException e) {
+                        System.out.println("Chiusura forzata");
+                    }
+                    scan.close(); //Chiude lo scanner per liberare le risorse
+                    return; // Esce dal main e termina il programma
                     
                 default:
 

@@ -3,6 +3,8 @@ package aggregator;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.util.ArrayList;
 
 /*
  * Rappresenta il server di rete dell'Aggregator (il "centralinista").
@@ -18,6 +20,9 @@ public class AggregatorServer implements Runnable {
     private ResourceRegistry registry;
     private DownloadLogManager logManager;
     
+    //Lista per tenere traccia dei thread figli attivi
+    private ArrayList<Thread> children = new ArrayList<>();
+
     // Il costruttore riceve i parametri dal main e li salva nelle variabili di istanza.
     public AggregatorServer(int port, ResourceRegistry registry, DownloadLogManager logManager) {
 
@@ -33,14 +38,19 @@ public class AggregatorServer implements Runnable {
         // in modo che venga chiuso automaticamente e in modo sicuro quando il blocco termina,
         // anche in caso di eccezioni.
         try (ServerSocket serverSocket = new ServerSocket(port)) {
+
+            // Imposta un timeout per non rendere l'accept() bloccante all'infinito
+            serverSocket.setSoTimeout(5000);
             System.out.println("Server in ascolto sulla porta: " + port);
 
-            // Ciclo infinito del server: aspetta connessioni all'infinito
-            while (true) {
 
+            // Condizione che permette di fermare il ciclo tramite interrupt
+            while (!Thread.interrupted()) {
+                try {
                 // Il metodo accept() è BLOCCANTE: il thread rimane fermo qui finché
                 // un  nodo remoto non si connette effettivamente a questa porta.
                 Socket clientSocket = serverSocket.accept();
+                if (!Thread.interrupted()) {
                 System.out.println("Nuovo nodo connessione accettato: " + clientSocket.getInetAddress());
 
                 // Appena un nodo si connette, creiamo un nuovo thread per gestire la comunicazione con quel nodo,
@@ -49,10 +59,32 @@ public class AggregatorServer implements Runnable {
 
                 // Avviamo il gestore del nodo remoto in un thread nuovo ("fire and forget").
                 // Così questo ciclo while può ricominciare subito ad aspettare il prossimo nodo.
-                new Thread(handler).start();
+                Thread handlerThread = new Thread(handler);
+                handlerThread.start();
+
+                //Aggiungiamo il thread alla lista dei figli
+                this.children.add(handlerThread);
+               
+            } else {
+                // Se il thread è stato interrotto, chiudiamo il socket appena accettato
+                clientSocket.close();
+                break; // Uscita dal ciclo while
             }
-        } catch (IOException e) {
-            System.out.println("Errore nel server di rete: " + e.getMessage());
+            } catch (SocketTimeoutException e) {
+                // Il timeot scatta, ignoriamo l'errore e il ciclo while ricontrolla la condizione 
+                continue;
+            
+            } catch (IOException e) {
+            break; // Altre condizioni di I/O causano l'uscita dal ciclo while e la chiusura del server
+        }
+    }
+} catch (IOException e) {
+            System.err.println("Errore nel server di rete: " + e.getMessage());
+        }
+
+        System.out.println("Interruzione dei thread client ");
+        for (Thread child : this.children) {
+            child.interrupt();
         }
     }
 }
