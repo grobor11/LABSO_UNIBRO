@@ -14,6 +14,7 @@ public class Protocol {
     // Comandi per il protocollo robusto di download
     public static final String REQUEST_DOWNLOAD = "REQUEST_DOWNLOAD";
     public static final String REPORT_DOWNLOAD_FAILED = "DOWNLOAD_FAIL";
+    public static final String REPORT_DOWNLOAD_SUCCESS = "DOWNLOAD_SUCCESS";
     public static final String RELEASE_TOKEN = "RELEASE_TOKEN";
     
     // Comandi Peer-to-Peer (Nodo -> Nodo)

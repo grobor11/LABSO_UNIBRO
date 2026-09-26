@@ -83,6 +83,8 @@ public class RobustDownloader {
                     // Salva la risorsa e aggiorna l'Aggregator prima di liberare il token.
                     localStorage.addData(resourceName, resourceContent);
                     System.out.println("[Downloader] Rilevazione '" + resourceName + "' salvata con successo.");
+                        notifyAggregator(Protocol.REPORT_DOWNLOAD_SUCCESS + " " + resourceName + " "
+                            + peerIp + " " + peerPort);
                     notifyAggregator(Protocol.UPDATE_RESOURCES + " " + resourceName);
                     return true;
                 }
