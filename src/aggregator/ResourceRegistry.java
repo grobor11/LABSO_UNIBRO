@@ -38,6 +38,7 @@ public synchronized void removeResource(String resourceName, PeerInfo peer){
     }
 } 
 
+// Mantiene la rimozione da tutte le risorse atomica rispetto alle altre operazioni sul registry.
 public synchronized void removePeer(PeerInfo peer){
     Iterator<Map.Entry<String, Set<PeerInfo>>> entries = registry.entrySet().iterator();
     while (entries.hasNext()) {

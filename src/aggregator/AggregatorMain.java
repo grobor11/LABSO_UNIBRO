@@ -34,78 +34,65 @@ public class AggregatorMain{
 
     }
 
+    //Gestisce i comandi dell'operatore e arresta il server su quit o EOF.
     private static void runCLI(ResourceRegistry registry, DownloadLogManager logManager, Thread serverThread) {
-        Scanner scan = new Scanner(System.in);
+        try (Scanner scan = new Scanner(System.in)) {
+            // hasNextLine evita l'eccezione di nextLine quando la console termina (EOF).
+            while (scan.hasNextLine()) {
+                System.out.println("Comandi disponibili: ");
+                System.out.println("1. listdata");
+                System.out.println("2. log");
+                System.out.println("3. quit");
 
-        // Ciclo infinito per mantenere CLI interattiva e sempre in ascolto
-        while (true) {
-            System.out.println("Comandi disponibili: ");
-            System.out.println("1. listdata");
-            System.out.println("2. log");
-            System.out.println("3. quit");
+                String command = scan.nextLine().trim();
 
-            // Lettura dell'input utente e rimozione eventuali spazi bianchi iniziali e finali
-            String command = scan.nextLine().trim();
-
-            // Switch case per gestire i comandi inseriti dall'utente
-            switch(command) {
-                case "listdata":
-
-                    // Comando per visuallizzare tutte le risorse registrate 
-                    // registry.getGlobalList() restituisce una Mappa di tutte le risorse 
-                    // Usiamo "var" così il compilatore capisce in automatico che il tipo è Map<String, Set<PeerInfo>>.
-                    var mappa = registry.getGlobalList();
-                    if (mappa.isEmpty()) {
-                        System.out.println("Nessuna risorsa registrata al momento.");
-                    } else {
-
-                        // Iteriamo sull'intero insieme (entryset) delle coppie chiave-valore della mappa
-                        //entry.getKey() restituisce il nome della risorsa, entry.getValue() restituisce l'insieme dei nodi che la possiedono.
-                        for (var entry : mappa.entrySet()) {
-                            System.out.println("File: " + entry.getKey() + " -> Posseduto da: " + entry.getValue());
+                switch(command) {
+                    case "listdata":
+                        var mappa = registry.getGlobalList();
+                        if (mappa.isEmpty()) {
+                            System.out.println("Nessuna risorsa registrata al momento.");
+                        } else {
+                            for (var entry : mappa.entrySet()) {
+                                System.out.println("File: " + entry.getKey() + " -> Posseduto da: " + entry.getValue());
+                            }
                         }
-                    }
-                    break;
+                        break;
 
-                case "log":
-
-                    // Comando per visualizzare lo storico dei download avvenuti tra i nodi sensore.
-                    // logManager.getLogs() restituisce una List di stringhe formattate.
-                    var logList = logManager.getLogs();
-
-                    // Verifichiamo se lo storico è vuoto
-                    if (logList.isEmpty()) {
-                        System.out.println("Nessun download registrato.");
-                    } else {
-
-                        // Usiamo ciclo for-each per stampare ogni log registrato
-                        for (String log : logList) {
-                            System.out.println(log);
+                    case "log":
+                        var logList = logManager.getLogs();
+                        if (logList.isEmpty()) {
+                            System.out.println("Nessun download registrato.");
+                        } else {
+                            for (String log : logList) {
+                                System.out.println(log);
+                            }
                         }
-                    }
-                    break;
+                        break;
 
-                case "quit":
+                    case "quit":
+                        System.out.println("Chiusura del server...");
+                        stopServer(serverThread);
+                        return;
 
-                    // Comando per spegnere in modo sicuro l'Aggregator.
-                    System.out.println("Chiusura del server...");
-                    serverThread.interrupt(); // Invia il segnale di spegnimento al ciclo while
-                    
-                    try{
-                        serverThread.join(); //Attende che l'AggregatorServer finisca di chiudere tutte le connessioni e termini il thread
-                    } catch (InterruptedException e) {
-                        System.out.println("Chiusura forzata");
-                    }
-                    scan.close(); //Chiude lo scanner per liberare le risorse
-                    return; // Esce dal main e termina il programma
-                    
-                default:
-
-                    // Se l'utente digita una parola non prevista, il server non va in crash ma mostra un messaggio di errore.
-                    System.out.println("Comando non riconosciuto. Usa uno dei comandi disponibili.");
-                    break;
+                    default:
+                        System.out.println("Comando non riconosciuto. Usa uno dei comandi disponibili.");
+                        break;
+                }
             }
+        }
 
+        System.out.println("Fine input. Chiusura del server...");
+        stopServer(serverThread);
+    }
+
+    // Richiede l'arresto del server e attende che abbia chiuso le connessioni attive.
+    private static void stopServer(Thread serverThread) {
+        serverThread.interrupt();
+        try {
+            serverThread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.out.println("Chiusura forzata");
         }
     }
 }

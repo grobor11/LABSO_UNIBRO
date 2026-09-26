@@ -28,6 +28,7 @@ public class ClientHandler implements Runnable {
     // Variabile di stato: memorizza l'identità del nodo che sta parlando con questo thread.
     // È fondamentale per poter rimuovere le sue risorse se si scollega improvvisamente.
     private PeerInfo connectedNode = null;
+    // Il token identifica un solo tentativo e resta associato alla risorsa e al peer selezionato.
     private String activeTokenId = null;
     private String activeResourceName = null;
     private PeerInfo activePeer = null;
@@ -179,6 +180,7 @@ public class ClientHandler implements Runnable {
                         }
 
                         PeerInfo uploader = new PeerInfo(upIp, upPort);
+                        // Impedisce a un report di modificare o registrare un tentativo diverso da quello autorizzato.
                         if (!resourceName.equals(activeResourceName) || !uploader.equals(activePeer)) {
                             out.println(Protocol.ERROR + " Segnalazione non corrispondente al token");
                             continue;
@@ -206,6 +208,7 @@ public class ClientHandler implements Runnable {
                         }
                         
                         PeerInfo uploader = new PeerInfo(upIp, upPort);
+                        // Rimuove dal registry solo il peer effettivamente assegnato a questo tentativo.
                         if (!resourceName.equals(activeResourceName) || !uploader.equals(activePeer)) {
                             out.println(Protocol.ERROR + " Segnalazione non corrispondente al token");
                             continue;
