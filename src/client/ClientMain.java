@@ -41,9 +41,13 @@ public class ClientMain {
             BufferedReader aggIn = new BufferedReader(new InputStreamReader(aggregatorSocket.getInputStream()));
             PrintWriter aggOut = new PrintWriter(aggregatorSocket.getOutputStream(), true);
 
-            // Registrazione del nodo sull'aggregator
-            // Inviamo il comando REGISTER seguito dal nostro IP e dalla porta del nostro mini server
-            aggOut.println(Protocol.REGISTER_NODE + " " + myIp + " " + myP2pPort);
+            // Registrazione del nodo e delle eventuali risorse locali già disponibili
+            StringBuilder registration = new StringBuilder(
+                    Protocol.REGISTER_NODE + " " + myIp + " " + myP2pPort);
+            for (String resourceName : localStorage.getAllKeys()) {
+                registration.append(" ").append(resourceName);
+            }
+            aggOut.println(registration);
             String response = aggIn.readLine();
 
             if (response == null || !response.startsWith(Protocol.SUCCESS)) {

@@ -69,14 +69,39 @@ public class ClientHandler implements Runnable {
                 String[] parti = request.trim().split("\\s+");
                 String comando = parti[0]; // La prima parola è sempre il tipo di comando
 
+                boolean malformed =
+                        (comando.equals(Protocol.REGISTER_NODE) && parti.length < 3)
+                        || (comando.equals(Protocol.UPDATE_RESOURCES) && parti.length != 2)
+                        || (comando.equals(Protocol.REQUEST_GLOBAL_LIST) && parti.length != 1)
+                        || (comando.equals(Protocol.REQUEST_DOWNLOAD) && parti.length != 2)
+                        || (comando.equals(Protocol.REPORT_DOWNLOAD_SUCCESS) && parti.length != 4)
+                        || (comando.equals(Protocol.REPORT_DOWNLOAD_FAILED) && parti.length != 4)
+                        || (comando.equals(Protocol.RELEASE_TOKEN) && parti.length != 3)
+                        || (comando.equals(Protocol.UNREGISTER_NODE) && parti.length != 1);
+
+                if (malformed) {
+                    out.println(Protocol.ERROR + " Parametri non validi");
+                    continue;
+                }
+
                 // 1. REGISTRAZIONE NODO
                 if (comando.equals(Protocol.REGISTER_NODE)) {
                     // Estraiamo IP e porta dalle parole successive
                     String ip = parti[1];
-                    int port = Integer.parseInt(parti[2]);
+                    int port;
+                    try {
+                        port = Integer.parseInt(parti[2]);
+                    } catch (NumberFormatException e) {
+                        out.println(Protocol.ERROR + " Porta non valida");
+                        continue;
+                    }
                     
                     // Salviamo l'identità del nodo in questo Thread
                     this.connectedNode = new PeerInfo(ip, port);
+
+                    for (int i = 3; i < parti.length; i++) {
+                        registry.addResource(parti[i], this.connectedNode);
+                    }
                     
                     out.println(Protocol.SUCCESS); // Rispondiamo con un "OK"
                 } 
