@@ -6,7 +6,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 /*
  * Gestisce i comandi inseriti dall'utente nel nodo sensore.
@@ -123,27 +126,48 @@ public class CommandHandler implements Runnable {
 
     // Mostra le rilevazioni salvate nell'archivio locale del nodo.
     private void handleLocalResourceList() {
-        Set<String> resourceNames = localStorage.getAllKeys();
+        Set<String> resourceNames = new TreeSet<>(localStorage.getAllKeys());
         System.out.println("Risorse:");
         for (String resourceName : resourceNames) {
-            System.out.println(resourceName);
+            System.out.println("- " + resourceName);
         }
     }
 
     // Richiede all'Aggregator l'elenco delle rilevazioni disponibili sui nodi remoti.
     private void handleRemoteResourceList() {
+        Map<String, Set<String>> resources = new TreeMap<>();
         try {
             aggregatorOut.println(Protocol.REQUEST_GLOBAL_LIST);
-            // Legge le righe inviate dall'Aggregator fino al messaggio di terminazione.
             String line;
             while ((line = aggregatorIn.readLine()) != null) {
-                if (line.equals(Protocol.LIST_END) || line.equals(Protocol.SUCCESS)) {
+                if (line.equals(Protocol.LIST_END)) {
                     break;
                 }
-                System.out.println(line);
+
+                String[] fields = line.split("\\s+");
+                if (fields.length == 4 && fields[0].equals(Protocol.PEER_DATA)) {
+                    String peerAddress = fields[2] + ":" + fields[3];
+                    resources.computeIfAbsent(fields[1], key -> new TreeSet<>()).add(peerAddress);
+                } else if (line.startsWith(Protocol.ERROR)) {
+                    System.err.println(line);
+                    return;
+                } else {
+                    System.err.println("Risposta non valida dall'Aggregator: " + line);
+                    return;
+                }
             }
         } catch (IOException e) {
             System.err.println("Errore di comunicazione con l'Aggregator: " + e.getMessage());
+            return;
+        }
+
+        System.out.println("Risorse:");
+        if (resources.isEmpty()) {
+            System.out.println("Nessuna risorsa disponibile sulla rete.");
+            return;
+        }
+        for (Map.Entry<String, Set<String>> entry : resources.entrySet()) {
+            System.out.println("- " + entry.getKey() + ": " + String.join(", ", entry.getValue()));
         }
     }
 
