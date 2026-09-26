@@ -6,6 +6,8 @@ import java.io.*;
 import java.net.Socket;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.Semaphore;
 
 /**
  * Gestisce la comunicazione diretta con un singolo nodo sensore (Client).
@@ -13,6 +15,8 @@ import java.util.Set;
  * Fa da "ponte" tra i messaggi di rete in arrivo e le memorie condivise del server.
  */
 public class ClientHandler implements Runnable {
+
+    private static final Semaphore downloadPermit = new Semaphore(1, true);
     
     // Il canale di comunicazione fisico con il nodo remoto
     private Socket socket;
@@ -24,6 +28,7 @@ public class ClientHandler implements Runnable {
     // Variabile di stato: memorizza l'identità del nodo che sta parlando con questo thread.
     // È fondamentale per poter rimuovere le sue risorse se si scollega improvvisamente.
     private PeerInfo connectedNode = null;
+    private String activeTokenId = null;
 
     // Il costruttore riceve il socket aperto dal Server e i riferimenti alle memorie centrali.
     public ClientHandler(Socket socket, ResourceRegistry registry, DownloadLogManager logManager) {
@@ -51,7 +56,7 @@ public class ClientHandler implements Runnable {
                 
                 // Il protocollo prevede messaggi testuali separati da spazi.
                 // Es: "REGISTER 192.168.1.5 8000"
-                String[] parti = request.split(" ");
+                String[] parti = request.trim().split("\\s+");
                 String comando = parti[0]; // La prima parola è sempre il tipo di comando
 
                 // 1. REGISTRAZIONE NODO
@@ -98,25 +103,66 @@ public class ClientHandler implements Runnable {
                     // Avvisiamo il client che abbiamo finito di trasmettere la lista
                     out.println(Protocol.LIST_END);
                 }
+
+                // 4. RICHIESTA DI UN PEER PER IL DOWNLOAD
+                else if (comando.equals(Protocol.REQUEST_DOWNLOAD)) {
+                    if (parti.length != 2 || connectedNode == null || activeTokenId != null) {
+                        out.println(Protocol.ERROR + " Richiesta di download non valida");
+                        continue;
+                    }
+
+                    downloadPermit.acquire();
+                    Set<PeerInfo> peers = registry.getPeersForResource(parti[1]);
+                    peers.remove(connectedNode);
+                    if (peers.isEmpty()) {
+                        downloadPermit.release();
+                        out.println(Protocol.NOT_FOUND);
+                    } else {
+                        PeerInfo selectedPeer = peers.iterator().next();
+                        activeTokenId = UUID.randomUUID().toString();
+                        out.println(Protocol.TOKEN_GRANTED + " " + activeTokenId + " "
+                                + selectedPeer.getIp() + " " + selectedPeer.getPort());
+                    }
+                }
         
-                // 4. SEGNALAZIONE DOWNLOAD FALLITO
+                // 5. SEGNALAZIONE DOWNLOAD FALLITO
                 else if (comando.equals(Protocol.REPORT_DOWNLOAD_FAILED)) {
-                    if (this.connectedNode != null) {
-                        // Formato: DOWNLOAD_FAIL <ip_uploader> <porta_uploader> <nome_file>
-                        String upIp = parti[1];
-                        int upPort = Integer.parseInt(parti[2]);
-                        String resourceName = parti[3];
+                    if (this.connectedNode != null && parti.length == 4 && activeTokenId != null) {
+                        // Formato ricevuto: DOWNLOAD_FAIL <nome_risorsa> <ip_peer> <porta_peer>
+                        String resourceName = parti[1];
+                        String upIp = parti[2];
+                        int upPort;
+                        try {
+                            upPort = Integer.parseInt(parti[3]);
+                        } catch (NumberFormatException e) {
+                            out.println(Protocol.ERROR + " Porta peer non valida");
+                            continue;
+                        }
                         
                         PeerInfo uploader = new PeerInfo(upIp, upPort);
+                        registry.removeResource(resourceName, uploader);
                         
                         // Scriviamo nel log condiviso che questo download è fallito
                         logManager.addLog(this.connectedNode, uploader, resourceName, false);
                         
                         out.println(Protocol.SUCCESS);
+                    } else {
+                        out.println(Protocol.ERROR + " Segnalazione di fallimento non valida");
                     }
                 }
 
-                // 5. DISCONNESSIONE VOLONTARIA
+                // 6. RILASCIO DEL TOKEN DI DOWNLOAD
+                else if (comando.equals(Protocol.RELEASE_TOKEN)) {
+                    if (parti.length == 3 && activeTokenId != null && activeTokenId.equals(parti[1])) {
+                        activeTokenId = null;
+                        downloadPermit.release();
+                        out.println(Protocol.SUCCESS);
+                    } else {
+                        out.println(Protocol.ERROR + " Token non valido");
+                    }
+                }
+
+                // 7. DISCONNESSIONE VOLONTARIA
                 else if (comando.equals(Protocol.UNREGISTER_NODE)) {
                     out.println(Protocol.SUCCESS);
                     break; // Uscendo dal while, finiamo dritti nel blocco finally per la pulizia
@@ -131,6 +177,11 @@ public class ClientHandler implements Runnable {
             // Se un nodo "crasha" o stacca il cavo di rete, entra in questa eccezione
             System.err.println("Connessione persa o errore con un client: " + e.getMessage());
         } finally {
+            if (activeTokenId != null) {
+                activeTokenId = null;
+                downloadPermit.release();
+            }
+
             // IL blocco FINALLY: Fault Tolerance e pulizia (Cleanup)
             // Viene eseguito sempre, sia in caso di uscita volontaria sia per errore di rete.
             
