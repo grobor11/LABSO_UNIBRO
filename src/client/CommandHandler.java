@@ -51,6 +51,8 @@ public class CommandHandler implements Runnable {
     public void run() {
         // Legge continuamente i comandi dalla console finché il client è attivo.
         try (BufferedReader consoleReader = new BufferedReader(new InputStreamReader(System.in))) {
+            System.out.println("Comandi disponibili:");
+            System.out.println("listdata local | listdata remote | add <nome_risorsa> <contenuto> | download <nome_risorsa> | quit");
             while (isRunning) {
                 System.out.print("> ");
                 String inputLine = consoleReader.readLine();

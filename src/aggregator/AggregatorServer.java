@@ -52,8 +52,6 @@ public class AggregatorServer implements Runnable {
                 // un  nodo remoto non si connette effettivamente a questa porta.
                 Socket clientSocket = serverSocket.accept();
                 if (!Thread.interrupted()) {
-                System.out.println("Nuovo nodo connessione accettato: " + clientSocket.getInetAddress());
-
                 // Appena un nodo si connette, creiamo un nuovo thread per gestire la comunicazione con quel nodo,
                 // e gli passiamo il socket appena aperto e le memorie condivise (registry e logManager)
                 ClientHandler handler = new ClientHandler(clientSocket, registry, logManager);
