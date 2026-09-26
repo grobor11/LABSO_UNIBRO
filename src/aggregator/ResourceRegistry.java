@@ -3,6 +3,7 @@ package aggregator;
 import common.PeerInfo;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 /*
@@ -36,6 +37,18 @@ public synchronized void removeResource(String resourceName, PeerInfo peer){
         }
     }
 } 
+
+public synchronized void removePeer(PeerInfo peer){
+    Iterator<Map.Entry<String, Set<PeerInfo>>> entries = registry.entrySet().iterator();
+    while (entries.hasNext()) {
+        Map.Entry<String, Set<PeerInfo>> entry = entries.next();
+        entry.getValue().remove(peer);
+        if (entry.getValue().isEmpty()) {
+            entries.remove();
+        }
+    }
+}
+
 /*
 Restituisce l'elenco dei nodi che possiedono una specifica rilevazione.
 Restituisce una "copia difensiva" (un nuovo HashSet) per impedire che il thread 
