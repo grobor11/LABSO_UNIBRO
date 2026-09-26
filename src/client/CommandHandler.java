@@ -27,6 +27,7 @@ public class CommandHandler implements Runnable {
 
     // Gestore del download delle risorse dagli altri nodi.
     private final RobustDownloader robustDownloader;
+    private final PeerServer peerServer;
 
     // Indica se il ciclo di lettura dei comandi deve rimanere attivo.
     private volatile boolean isRunning = true;
@@ -34,12 +35,13 @@ public class CommandHandler implements Runnable {
     // Riceve tutte le risorse necessarie per eseguire i comandi dell'utente.
     public CommandHandler(LocalStorage localStorage, Socket aggregatorSocket, 
                           BufferedReader aggregatorIn, PrintWriter aggregatorOut, 
-                          RobustDownloader robustDownloader) {
+                          RobustDownloader robustDownloader, PeerServer peerServer) {
         this.localStorage = localStorage;
         this.aggregatorSocket = aggregatorSocket;
         this.aggregatorIn = aggregatorIn;
         this.aggregatorOut = aggregatorOut;
         this.robustDownloader = robustDownloader;
+        this.peerServer = peerServer;
     }
 
     @Override
@@ -173,6 +175,7 @@ public class CommandHandler implements Runnable {
     // Arresta il client, avvisa l'Aggregator e chiude la connessione di rete.
     private void handleDisconnect() {
         isRunning = false;
+        peerServer.stop();
         aggregatorOut.println(Protocol.UNREGISTER_NODE);
         try {
             if (aggregatorSocket != null && !aggregatorSocket.isClosed()) {
