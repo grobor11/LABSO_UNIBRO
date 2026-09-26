@@ -38,6 +38,15 @@ public class ClientHandler implements Runnable {
         this.logManager = logManager;
     }
 
+    public void closeConnection() {
+        try {
+            if (!socket.isClosed()) {
+                socket.close();
+            }
+        } catch (IOException ignored) {
+        }
+    }
+
     @Override
     public void run() {
         System.out.println("Avvio gestione nodo remoto in un nuovo thread...");

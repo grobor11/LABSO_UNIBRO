@@ -22,6 +22,7 @@ public class AggregatorServer implements Runnable {
     
     //Lista per tenere traccia dei thread figli attivi
     private ArrayList<Thread> children = new ArrayList<>();
+    private ArrayList<ClientHandler> handlers = new ArrayList<>();
 
     // Il costruttore riceve i parametri dal main e li salva nelle variabili di istanza.
     public AggregatorServer(int port, ResourceRegistry registry, DownloadLogManager logManager) {
@@ -60,10 +61,9 @@ public class AggregatorServer implements Runnable {
                 // Avviamo il gestore del nodo remoto in un thread nuovo ("fire and forget").
                 // Così questo ciclo while può ricominciare subito ad aspettare il prossimo nodo.
                 Thread handlerThread = new Thread(handler);
-                handlerThread.start();
-
-                //Aggiungiamo il thread alla lista dei figli
                 this.children.add(handlerThread);
+                this.handlers.add(handler);
+                handlerThread.start();
                
             } else {
                 // Se il thread è stato interrotto, chiudiamo il socket appena accettato
@@ -83,8 +83,18 @@ public class AggregatorServer implements Runnable {
         }
 
         System.out.println("Interruzione dei thread client ");
+        for (ClientHandler handler : this.handlers) {
+            handler.closeConnection();
+        }
+
         for (Thread child : this.children) {
             child.interrupt();
+            try {
+                child.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
     }
 }
