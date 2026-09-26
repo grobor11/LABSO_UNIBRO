@@ -126,7 +126,29 @@ public class ClientHandler implements Runnable {
                     }
                 }
         
-                // 5. SEGNALAZIONE DOWNLOAD FALLITO
+                // 5. SEGNALAZIONE DOWNLOAD RIUSCITO
+                else if (comando.equals(Protocol.REPORT_DOWNLOAD_SUCCESS)) {
+                    if (this.connectedNode != null && parti.length == 4 && activeTokenId != null) {
+                        // Formato: DOWNLOAD_SUCCESS <nome_risorsa> <ip_peer> <porta_peer>
+                        String resourceName = parti[1];
+                        String upIp = parti[2];
+                        int upPort;
+                        try {
+                            upPort = Integer.parseInt(parti[3]);
+                        } catch (NumberFormatException e) {
+                            out.println(Protocol.ERROR + " Porta peer non valida");
+                            continue;
+                        }
+
+                        logManager.addLog(this.connectedNode,
+                                new PeerInfo(upIp, upPort), resourceName, true);
+                        out.println(Protocol.SUCCESS);
+                    } else {
+                        out.println(Protocol.ERROR + " Segnalazione di successo non valida");
+                    }
+                }
+
+                // 6. SEGNALAZIONE DOWNLOAD FALLITO
                 else if (comando.equals(Protocol.REPORT_DOWNLOAD_FAILED)) {
                     if (this.connectedNode != null && parti.length == 4 && activeTokenId != null) {
                         // Formato ricevuto: DOWNLOAD_FAIL <nome_risorsa> <ip_peer> <porta_peer>
@@ -152,7 +174,7 @@ public class ClientHandler implements Runnable {
                     }
                 }
 
-                // 6. RILASCIO DEL TOKEN DI DOWNLOAD
+                // 7. RILASCIO DEL TOKEN DI DOWNLOAD
                 else if (comando.equals(Protocol.RELEASE_TOKEN)) {
                     if (parti.length == 3 && activeTokenId != null && activeTokenId.equals(parti[1])) {
                         activeTokenId = null;
@@ -163,14 +185,14 @@ public class ClientHandler implements Runnable {
                     }
                 }
 
-                // 7. DISCONNESSIONE VOLONTARIA
+                // 8. DISCONNESSIONE VOLONTARIA
                 else if (comando.equals(Protocol.UNREGISTER_NODE)) {
                     out.println(Protocol.SUCCESS);
                     voluntaryDisconnect = true;
                     break; // Uscendo dal while, finiamo dritti nel blocco finally per la pulizia
                 }
                 
-                // 6. COMANDO SCONOSCIUTO
+                // 9. COMANDO SCONOSCIUTO
                 else {
                     out.println(Protocol.ERROR + " Comando non riconosciuto");
                 }
