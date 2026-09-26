@@ -29,6 +29,8 @@ public class ClientHandler implements Runnable {
     // È fondamentale per poter rimuovere le sue risorse se si scollega improvvisamente.
     private PeerInfo connectedNode = null;
     private String activeTokenId = null;
+    private String activeResourceName = null;
+    private PeerInfo activePeer = null;
     private boolean voluntaryDisconnect = false;
 
     // Il costruttore riceve il socket aperto dal Server e i riferimenti alle memorie centrali.
@@ -155,6 +157,8 @@ public class ClientHandler implements Runnable {
                     } else {
                         PeerInfo selectedPeer = peers.iterator().next();
                         activeTokenId = UUID.randomUUID().toString();
+                        activeResourceName = parti[1];
+                        activePeer = selectedPeer;
                         out.println(Protocol.TOKEN_GRANTED + " " + activeTokenId + " "
                                 + selectedPeer.getIp() + " " + selectedPeer.getPort());
                     }
@@ -162,7 +166,7 @@ public class ClientHandler implements Runnable {
         
                 // 5. SEGNALAZIONE DOWNLOAD RIUSCITO
                 else if (comando.equals(Protocol.REPORT_DOWNLOAD_SUCCESS)) {
-                    if (this.connectedNode != null && parti.length == 4 && activeTokenId != null) {
+                    if (this.connectedNode != null && activeTokenId != null) {
                         // Formato: DOWNLOAD_SUCCESS <nome_risorsa> <ip_peer> <porta_peer>
                         String resourceName = parti[1];
                         String upIp = parti[2];
@@ -174,8 +178,13 @@ public class ClientHandler implements Runnable {
                             continue;
                         }
 
-                        logManager.addLog(this.connectedNode,
-                                new PeerInfo(upIp, upPort), resourceName, true);
+                        PeerInfo uploader = new PeerInfo(upIp, upPort);
+                        if (!resourceName.equals(activeResourceName) || !uploader.equals(activePeer)) {
+                            out.println(Protocol.ERROR + " Segnalazione non corrispondente al token");
+                            continue;
+                        }
+
+                        logManager.addLog(this.connectedNode, uploader, resourceName, true);
                         out.println(Protocol.SUCCESS);
                     } else {
                         out.println(Protocol.ERROR + " Segnalazione di successo non valida");
@@ -184,7 +193,7 @@ public class ClientHandler implements Runnable {
 
                 // 6. SEGNALAZIONE DOWNLOAD FALLITO
                 else if (comando.equals(Protocol.REPORT_DOWNLOAD_FAILED)) {
-                    if (this.connectedNode != null && parti.length == 4 && activeTokenId != null) {
+                    if (this.connectedNode != null && activeTokenId != null) {
                         // Formato ricevuto: DOWNLOAD_FAIL <nome_risorsa> <ip_peer> <porta_peer>
                         String resourceName = parti[1];
                         String upIp = parti[2];
@@ -197,6 +206,11 @@ public class ClientHandler implements Runnable {
                         }
                         
                         PeerInfo uploader = new PeerInfo(upIp, upPort);
+                        if (!resourceName.equals(activeResourceName) || !uploader.equals(activePeer)) {
+                            out.println(Protocol.ERROR + " Segnalazione non corrispondente al token");
+                            continue;
+                        }
+
                         registry.removeResource(resourceName, uploader);
                         
                         // Scriviamo nel log condiviso che questo download è fallito
@@ -210,8 +224,11 @@ public class ClientHandler implements Runnable {
 
                 // 7. RILASCIO DEL TOKEN DI DOWNLOAD
                 else if (comando.equals(Protocol.RELEASE_TOKEN)) {
-                    if (parti.length == 3 && activeTokenId != null && activeTokenId.equals(parti[1])) {
+                    if (activeTokenId != null && activeTokenId.equals(parti[1])
+                            && activeResourceName.equals(parti[2])) {
                         activeTokenId = null;
+                        activeResourceName = null;
+                        activePeer = null;
                         downloadPermit.release();
                         out.println(Protocol.SUCCESS);
                     } else {
@@ -237,6 +254,8 @@ public class ClientHandler implements Runnable {
         } finally {
             if (activeTokenId != null) {
                 activeTokenId = null;
+                activeResourceName = null;
+                activePeer = null;
                 downloadPermit.release();
             }
 
@@ -248,12 +267,7 @@ public class ClientHandler implements Runnable {
             // Così evitiamo che altri client cerchino di scaricare da un nodo ormai morto.
             if (this.connectedNode != null && !voluntaryDisconnect) {
                 System.out.println("Disconnessione rilevata. Pulizia risorse per il nodo: " + this.connectedNode);
-                
-                // Iteriamo su tutti i file per assicurarci di rimuovere questo peer ovunque
-                Map<String, Set<PeerInfo>> mappa = registry.getGlobalList();
-                for (String resourceName : mappa.keySet()) {
-                    registry.removeResource(resourceName, this.connectedNode);
-                }
+                registry.removePeer(this.connectedNode);
             }
             
             // Chiusura sicura del canale di rete
