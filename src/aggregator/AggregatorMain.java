@@ -37,13 +37,9 @@ public class AggregatorMain{
     //Gestisce i comandi dell'operatore e arresta il server su quit o EOF.
     private static void runCLI(ResourceRegistry registry, DownloadLogManager logManager, Thread serverThread) {
         try (Scanner scan = new Scanner(System.in)) {
-            // hasNextLine evita l'eccezione di nextLine quando la console termina (EOF).
+            System.out.println("Comandi disponibili:");
+            System.out.println("listdata | log | quit");
             while (scan.hasNextLine()) {
-                System.out.println("Comandi disponibili: ");
-                System.out.println("1. listdata");
-                System.out.println("2. log");
-                System.out.println("3. quit");
-
                 String command = scan.nextLine().trim();
 
                 switch(command) {
