@@ -29,6 +29,7 @@ public class ClientHandler implements Runnable {
     // È fondamentale per poter rimuovere le sue risorse se si scollega improvvisamente.
     private PeerInfo connectedNode = null;
     private String activeTokenId = null;
+    private boolean voluntaryDisconnect = false;
 
     // Il costruttore riceve il socket aperto dal Server e i riferimenti alle memorie centrali.
     public ClientHandler(Socket socket, ResourceRegistry registry, DownloadLogManager logManager) {
@@ -165,6 +166,7 @@ public class ClientHandler implements Runnable {
                 // 7. DISCONNESSIONE VOLONTARIA
                 else if (comando.equals(Protocol.UNREGISTER_NODE)) {
                     out.println(Protocol.SUCCESS);
+                    voluntaryDisconnect = true;
                     break; // Uscendo dal while, finiamo dritti nel blocco finally per la pulizia
                 }
                 
@@ -188,7 +190,7 @@ public class ClientHandler implements Runnable {
             // Se il nodo aveva fatto il login (connectedNode != null), 
             // rimuoviamo tutti i suoi file dalla lista centrale.
             // Così evitiamo che altri client cerchino di scaricare da un nodo ormai morto.
-            if (this.connectedNode != null) {
+            if (this.connectedNode != null && !voluntaryDisconnect) {
                 System.out.println("Disconnessione rilevata. Pulizia risorse per il nodo: " + this.connectedNode);
                 
                 // Iteriamo su tutti i file per assicurarci di rimuovere questo peer ovunque

@@ -2,7 +2,8 @@ package client;
 
 import common.Protocol;
 import java.io.*;
-import java.net.*;
+import java.net.InetAddress;
+import java.net.Socket;
 
 /*
  * Punto di avvio del Nodo Sensore.
@@ -29,11 +30,10 @@ public class ClientMain {
         LocalStorage localStorage = new LocalStorage();
 
         try {
-            // Creazione del "mini server" P2P del nodo
-            // Inserendo '0' come porta, diciamo al Sistema Operativo di assegnarci 
-            // la prima porta libera disponibile. Così possiamo avviare quanti client vogliamo sullo stesso PC.
-            ServerSocket p2pServer = new ServerSocket(0);
-            int myP2pPort = p2pServer.getLocalPort(); // Recuperiamo la porta assegnata dal SO
+            // Creazione del server P2P del nodo. PeerServer condivide il lock
+            // tra tutti gli handler delle richieste in ingresso.
+            PeerServer peerServer = new PeerServer(0, localStorage);
+            int myP2pPort = peerServer.getPort();
             String myIp = InetAddress.getLocalHost().getHostAddress(); // Recuperiamo l'IP locale del nodo
 
             // Connessione all'aggregator centrale
@@ -54,34 +54,16 @@ public class ClientMain {
             System.out.println("Connessione all'aggregator avvenuta con successo!");
             System.out.println("La tua porta P2P locale e': " + myP2pPort);
 
+            Thread peerThread = new Thread(peerServer, "peer-server");
+            peerThread.start();
+
             //Inizializzazione ed avvio del CommandHandler (Interfaccia utente)
             RobustDownloader downloader = new RobustDownloader(localStorage, aggIn, aggOut);
-            CommandHandler cliHandler = new CommandHandler(localStorage, aggregatorSocket, aggIn, aggOut, downloader);
+            CommandHandler cliHandler = new CommandHandler(localStorage, aggregatorSocket, aggIn, aggOut, downloader, peerServer);
 
             //Avviamo la CLI in un thread separato così non blocca l'ascolto delle connessioni in arrivo
             Thread cliThread = new Thread(cliHandler);
             cliThread.start();
-
-            // Ciclo infinito di ascolto per le richeste Peer-to-Peer
-            //Il thread principale (questo) fa da server per gli altri nodi sensori che vogliono scaricare file.
-            while (!Thread.interrupted()) {
-                try {
-                    
-                    // L'accept() blocca il thread in attesa che un altro client si connetta 
-                    Socket peerSocket = p2pServer.accept();
-
-                    //Appena un nodo si connette, avviamo un thread al volo per inviargli i file richiesto
-                    new Thread(() -> handlerPeerRequest(peerSocket, localStorage)).start();
-
-                } catch (IOException e) {
-                    if (!p2pServer.isClosed()) {
-                        System.err.println("Errore nell'accettazione della connessione P2P.");
-
-                    }
-                    break; // Uscita dal ciclo se il server socket è chiuso o c'è un errore
-
-                }
-            }
 
         } catch (IOException e) {
             System.err.println("Impossibile connettersi all'Aggregator (" + aggregatorIP + ":" + aggregatorPort + "). Verificare che sia acceso.");
@@ -91,37 +73,4 @@ public class ClientMain {
         
     }
 
-    /*
-     * Metodo di supporto che gestisce la richiesta di un altro nodo.
-     * Quando un Peer si connette a noi, ci chiede un file. Noi lo cerchiamo nel LocalStorage e glielo inviamo.
-     */
-    private static void handlerPeerRequest(Socket peerSocket, LocalStorage localStorage) {
-        try (
-            BufferedReader in = new BufferedReader(new InputStreamReader(peerSocket.getInputStream()));
-            PrintWriter out = new PrintWriter(peerSocket.getOutputStream(), true)
-        ) {
-            String request = in.readLine();
-
-            if (request != null && request.startsWith(Protocol.PEER_DOWNLOAD_REQUEST)) {
-                String[] parti = request.split(" ");
-                String resourceName = parti[1];
-
-                if(localStorage.hasData(resourceName)) {
-                    String contenuto = localStorage.getData(resourceName);
-                    out.println(Protocol.PEER_DATA + " " + contenuto);
-                    System.out.println("\n[P2P Server] Inviata risorsa '" + resourceName + " ' a un peer remoto. \n> ");
-
-                } else {
-                    out.println(Protocol.ERROR + " Risorsa non trovata");
-
-                }
-                }
-            } catch (IOException e) {
-                System.err.println("Errore durante l'invio della risorsa al peer.");
-        } finally {
-            try {
-                peerSocket.close();
-            } catch (IOException ignored) {}
-        }
-    }
 }
