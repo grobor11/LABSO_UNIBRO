@@ -53,7 +53,8 @@ public class CommandHandler implements Runnable {
                 String inputLine = consoleReader.readLine();
 
                 if (inputLine == null) {
-                    break;
+                    handleDisconnect();
+                    return;
                 }
 
                 inputLine = inputLine.trim();
