@@ -1,0 +1,11 @@
+COMPILAZIONE
+$javaFiles = Get-ChildItem .\src -Recurse -Filter *.java | ForEach-Object { $_.FullName }
+javac $javaFiles
+
+AGGREGATORE
+java -cp src aggregator.AggregatorMain 9000
+
+NODO SENSORE
+java -cp src client.ClientMain 127.0.0.1 9000
+
+se l'aggregator è su un altro computer, usare suo IP
